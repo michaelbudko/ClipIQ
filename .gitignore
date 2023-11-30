@@ -13,6 +13,8 @@ frontend/node_modules
 
 # Virtual environment
 backend/venv/
+# Media downloads
+backend/media/
 
 # misc
 .DS_Store
@@ -24,3 +26,5 @@ backend/venv/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+.env
