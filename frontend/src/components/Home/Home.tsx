@@ -5,6 +5,7 @@ import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
 import InputAdornment from '@mui/material/InputAdornment';
 import './Home.css';
+import axios from "axios";
 
 // Define a custom theme with Roboto font
 const theme = createTheme({
@@ -33,14 +34,45 @@ const LighterTextField = styled(TextField)({
 const GreenButton = styled(Button)({
     backgroundColor: 'rgb(17,180,52)',
     color: 'fff',
-  });
+});
+
+const ErrorText = styled('p')({
+    color: 'orange',
+    marginTop: '10px',
+});
 
 function Home() {
     const [youtubeUrl, setYoutubeUrl] = useState('');
+    const [error, setError] = useState('');
+    const [audioFile, setAudioFile] = useState('');
 
-    const handleSubmit = (e: FormEvent) => {
+    const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        console.log(`Submitted YouTube URL: ${youtubeUrl}`);
+    
+        // Validate YouTube link
+        const youtubeRegex = /^(https?\:\/\/)?(www\.youtube\.com|youtu\.?be)\/.+$/;
+        if (!youtubeRegex.test(youtubeUrl)) {
+          setError('Please enter a valid YouTube link');
+          setAudioFile('');
+          return;
+        }
+    
+        // If valid, make a request to Django endpoint
+        try {
+            const response = await axios.get(`http://localhost:8000/clipiq/download/?url=${encodeURIComponent(youtubeUrl)}`, {
+              responseType: 'blob', // Important for handling binary data (e.g., an MP3 file)
+            });
+            // Create a Blob from the response data
+            const blob = new Blob([response.data], { type: 'audio/mp3' });
+            // Create a URL for the Blob and set it as the audio file
+            const audioUrl = URL.createObjectURL(blob);
+            setAudioFile(audioUrl);
+            setError('');
+          } catch (error) {
+            console.error('Error fetching audio file:', error);
+            setError('An error occurred while fetching the audio file');
+            setAudioFile('');
+          }
     };
 
     return (
@@ -68,6 +100,8 @@ function Home() {
                         ),
                         }}
                     />
+                    {error && <ErrorText>{error}</ErrorText>}
+                    {audioFile && <audio controls src={audioFile} />}
                 </StyledForm>
             </StyledContainer>
         </ThemeProvider>
