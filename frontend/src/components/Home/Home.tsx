@@ -62,18 +62,10 @@ const VideoThumbnailContainer = styled('div')({
 });
 
 const VideoThumbnail = styled('img')({
-    width: '100%', // Make the image responsive
+    width: '100%',
     height: 'auto',
-    borderRadius: '4px', // Optional, for rounded corners
-});
-
-const SliderContainer = styled('div')({
-    width: '60%', // Set the width to 60% of the screen size
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    margin: '20px auto', // Center the container
+    borderRadius: '4px',
+    boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.2)' // Light shadow around the thumbnail
 });
 
 const TimeframeText = styled(Typography)({
@@ -86,10 +78,43 @@ const formatTime = (seconds: any) => {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 };
 
+const TimeframeContainer = styled('div')({
+    backgroundColor: '#505C66', // Slightly lighter background color
+    padding: '20px',
+    borderRadius: '8px',
+    boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.1)', // Optional shadow for depth
+    width: '40%',
+    margin: '20px auto',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center'
+});
+
+const calculateCreditsUsed = (range: any) => {
+    const minutes = Math.ceil((range[1] - range[0]) / 60);
+    return `Credits used: ${minutes} minute${minutes !== 1 ? 's' : ''}`;
+};
+
+const VideoDetailsContainer = styled('div')({
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center', // Centers content vertically in the container
+    textAlign: 'center',
+    width: '100%', // Adjust as needed
+    margin: '20px 0'
+});
+
+interface InterestingIndex {
+    start: number;
+    end: number;
+}
+
 function Home() {
     const [youtubeUrl, setYoutubeUrl] = useState('');
     const [videoDetails, setVideoDetails] = useState({ title: '', thumbnail: '', duration: 0 });
     const [timeRange, setTimeRange] = useState([0, 0]); // [start, end]
+    const [interestingIndexes, setInterestingIndexes] = useState<InterestingIndex[]>([]);
     const [error, setError] = useState('');
     const [transcript, setTranscript] = useState('');
 
@@ -113,6 +138,11 @@ function Home() {
             });
             setTimeRange([0, details.duration]);
             setError('');
+
+            const interestingResponse = await axios.get(`http://localhost:8000/clipiq/download/?url=${encodeURIComponent(youtubeUrl)}`);
+            setInterestingIndexes(interestingResponse.data.interesting_indexes);
+    
+            setError('');
         } catch (fetchError) {
             console.error('Error fetching video details:', fetchError);
             setError('An error occurred while fetching the video details');
@@ -129,6 +159,7 @@ function Home() {
                         label="YouTube URL"
                         variant="outlined"
                         value={youtubeUrl}
+                        autoComplete="off"
                         onChange={(e) => setYoutubeUrl(e.target.value)}
                         fullWidth
                         margin="normal"
@@ -150,18 +181,20 @@ function Home() {
                 </StyledForm>
 
                 {videoDetails.thumbnail && (
-                    <VideoThumbnailContainer>
-                        <VideoThumbnail src={videoDetails.thumbnail} alt={videoDetails.title} />
-                        <Typography variant="subtitle1">{videoDetails.title}</Typography>
-                    </VideoThumbnailContainer>
+                    <VideoDetailsContainer>
+                        <Typography variant="subtitle1" style={{ color: 'white' }}>{videoDetails.title}</Typography>
+                        <VideoThumbnailContainer>
+                            <VideoThumbnail src={videoDetails.thumbnail} alt={videoDetails.title} />
+                        </VideoThumbnailContainer>
+                    </VideoDetailsContainer>
                 )}
 
                 {videoDetails.duration > 0 && (
-                    <SliderContainer>
-                        <TimeframeText variant="subtitle1">Video timeframe</TimeframeText>
+                    <TimeframeContainer>
+                        <TimeframeText variant="subtitle1"> {calculateCreditsUsed(timeRange)}</TimeframeText>
                         <Slider
                             value={timeRange}
-                            onChange={(event: Event, newValue: number | number[]) => {
+                            onChange={(event, newValue) => {
                                 if (Array.isArray(newValue)) {
                                     setTimeRange(newValue as number[]);
                                 }
@@ -170,7 +203,22 @@ function Home() {
                             valueLabelFormat={formatTime}
                             max={videoDetails.duration}
                         />
-                    </SliderContainer>
+                    </TimeframeContainer>
+                )}
+
+                {interestingIndexes.length > 0 && (
+                    <div>
+                        <Typography variant="h6" style={{ color: 'white', marginTop: '20px' }}>
+                            Interesting Moments:
+                        </Typography>
+                        <ul>
+                            {interestingIndexes.map((index, idx) => (
+                                <li key={idx} style={{ color: 'white' }}>
+                                    Start: {index.start}, End: {index.end}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
                 )}
 
             </StyledContainer>
