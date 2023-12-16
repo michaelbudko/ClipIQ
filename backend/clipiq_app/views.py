@@ -5,6 +5,7 @@ from django.views.decorators.http import require_GET
 from pytube import YouTube
 import requests
 import os
+import re
 import openai
 import pysrt
 from dotenv import load_dotenv
@@ -27,7 +28,6 @@ def transcribe_audio_with_whisper_api(file_path):
                 file=audio_file
             )
         srt_path = file_path.replace('.mp3', '.srt')
-        print(transcript)
         with open(srt_path, "w") as srt_file:
             srt_file.write(transcript)
         return srt_path
@@ -41,14 +41,15 @@ def parse_srt(file_path):
     return subtitles
 
 def find_interesting_moments(subtitles):
-    prompt = "Determine the most interesting moments from these subtitles and return only indexes, note that you can combine indexes to generate 10-15 most interesting clips of max length of 60 seconds:\n\n"
-    prompt += "\n\n".join([f"{sub['index']}: {sub['text']}" for sub in subtitles])
+    prompt = "Return only indexes of most interesting moments from SRT file, you can combine indexes to generate 10-15 clips of max length of 60 seconds. Return should have format of [startIdx, endIdx, title]:\n"
+    prompt += "\n\n".join([f"{sub['index']}: {sub['text']}" for sub in subtitles]) # NOTE: index is offset by -1
 
     try:
-        response = client.completions.create(prompt=prompt, model="gpt-3.5-turbo-instruct")
+        response = client.completions.create(prompt=prompt, model="gpt-3.5-turbo-instruct", max_tokens=300) #NOTE: max tokens dictates number of clips
         if response.choices:
             response_text = response.choices[0].text.strip()
             interesting_indexes = parse_chatgpt_response(response_text)
+            print("LENGTH " + str(len(interesting_indexes)))
             return interesting_indexes
         else:
             raise Exception("No response from OpenAI API")
@@ -57,11 +58,17 @@ def find_interesting_moments(subtitles):
         return []
     
 def parse_chatgpt_response(response_data):
-    # Implement logic based on how ChatGPT responds
-    # Example: assuming ChatGPT returns a list of indices
-    print("RESPONSE DATA: " + response_data)
-    interesting_indexes = [int(index) for index in response_data.split() if index.isdigit()]
-    return interesting_indexes
+    # Use a regular expression to find all instances of the pattern [index, index, "title"]
+    pattern = r"\[(\d+), (\d+), \"(.*?)\"\]"
+    matches = re.findall(pattern, response_data)
+
+    # Convert each match to the desired format: [startIdx, endIdx, title]
+    interesting_clips = []
+    for match in matches:
+        startIdx, endIdx, title = match
+        interesting_clips.append([int(startIdx), int(endIdx), title])
+
+    return interesting_clips
 
 @require_GET
 def download_and_transcribe_audio(request):
@@ -77,12 +84,13 @@ def download_and_transcribe_audio(request):
         audio_path = f'media/{sanitized_title}'
         audio_stream.download('media/', filename=sanitized_title)
         srt_path = transcribe_audio_with_whisper_api(audio_path)
-        print("str path: " + srt_path)
 
         # Parse the SRT file and find interesting moments
         subtitles = parse_srt(srt_path)
+        print("GOT HERE1")
         interesting_indexes = find_interesting_moments(subtitles)
-        print("INTERESTING INDEXES: " + interesting_indexes)
+        print("INTERESTING INDEXES: " + str(interesting_indexes))
+        print("GOT HERE2")
 
         # Optionally, delete the audio file after transcription
         os.remove(audio_path)
